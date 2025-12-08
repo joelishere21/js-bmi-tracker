@@ -1,7 +1,13 @@
 {
-  "short_name": "BMI Tracker",
-  "name": "Weight & BMI Tracker",
-  "version": "1",
+  "short_name": "JSWeight",
+  "name": "My Weight Tracker",
+  "description": "A simple web app to track your weight over time.",
+  "version": "1.0",
+  "start_url": "./index.html",
+  "scope": "./",
+  "background_color": "#4a90e2",
+  "theme_color": "#4a90e2",
+  "display": "standalone",
   "icons": [
     {
       "src": "icon-192x192.png",
@@ -13,9 +19,5 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "start_url": ".",
-  "background_color": "#4a90e2",
-  "theme_color": "#4a90e2",
-  "display": "standalone"
+  ]
 }
