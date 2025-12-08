@@ -1,8 +1,8 @@
 {
   "short_name": "JSWeight",
   "name": "My Weight Tracker",
-  "description": "A simple web app to track your weight over time.",
-  "version": "1.0",
+  "description": "A simple web app to track your weight, BMI and goal over time.",
+  "version": "1.2",
   "start_url": "./index.html",
   "scope": "./",
   "background_color": "#4a90e2",
