@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4a90e2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Weight Tracker">
+    <link rel="manifest" href="manifest.json">
+    <title>Weight & BMI Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            overflow-x: hidden;
+            touch-action: manipulation;
+        }
+        .header {
+            background: rgba(74, 144, 226, 0.95);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 15px 20px;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .title { font-size: 20px; font-weight: 600; }
+
+        /* Animated Hamburger */
+        .hamburger {
+            width: 44px; height: 44px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; transition: background 0.3s;
+        }
+        .hamburger:hover { background: rgba(255,255,255,0.2); }
+        .hamburger svg { width: 28px; height: 28px; }
+        .line {
+            fill: none; stroke: white; stroke-width: 2.8;
+            stroke-linecap: round; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .hamburger.active .line1 { transform: translateY(8px) rotate(45deg); }
+        .hamburger.active .line2 { opacity: 0; transform: scaleX(0.1); }
+        .hamburger.active .line3 { transform: translateY(-8px) rotate(-45deg); }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed; top: 0; left: -300px; width: 280px; height: 100%;
+            background: white; box-shadow: 2px 0 15px rgba(0,0,0,0.3);
+            transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 2000; padding-top: 80px;
+        }
+        .sidebar.open { left: 0; }
+        .overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            opacity: 0; visibility: hidden; transition: all 0.35s; z-index: 1500;
+        }
+        .overlay.show { opacity: 1; visibility: visible; }
+
+        .menu-item {
+            padding: 18px 20px; border-bottom: 1px solid #eee;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .menu-item:hover { background: #f0f8ff; }
+        .menu-title {
+            font-weight: 600; font-size: 16px;
+            display: flex; align-items: center; gap: 14px;
+        }
+        .menu-desc {
+            font-size: 13px; color: #777; margin-top: 4px; padding-left: 38px;
+        }
+
+        .content { margin-top: 70px; padding: 20px; max-width: 600px; margin-left: auto; margin-right: auto; }
+        .card { background: white; border-radius: 16px; box-shadow: 0 8px 25px rgba(0,0,0,0.15); overflow: hidden; margin-bottom: 20px; }
+
+        /* Goal Progress Ring */
+        .goal-card {
+            padding: 30px 20px;
+            text-align: center;
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+        }
+        .progress-ring {
+            width: 160px; height: 160px;
+            margin: 0 auto 15px;
+            position: relative;
+        }
+        .progress-ring svg {
+            transform: rotate(-90deg);
+        }
+        .progress-circle-bg {
+            fill: none; stroke: rgba(255,255,255,0.2); stroke-width: 12;
+        }
+        .progress-circle {
+            fill: none; stroke: #fff; stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.8s ease;
+        }
+        .progress-text {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 32px; font-weight: bold;
+        }
+        .goal-info { font-size: 18px; margin: 10px 0; }
+        .goal-achieved { background: #28a745 !important; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.8; } }
+
+        .input-section { padding: 20px; background: #f8f9fa; }
+        input[type="number"], input[type="date"] {
+            width: 100%; padding: 14px; border: 2px solid #ddd; border-radius: 10px;
+            font-size: 16px; margin-bottom: 12px;
+        }
+        button.main-btn { width: 100%; padding: 14px; background: #4a90e2; color: white; border: none; border-radius: 10px; font-size: 16px; cursor: pointer; }
+        .chart-container { position: relative; height: 320px; padding: 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 15px; }
+        th, td { padding: 14px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; font-weight: 600; }
+        .bmi-under { color: #17a2b8; }
+        .bmi-normal { color: #28a745; font-weight: bold; }
+        .bmi-over { color: #ffc107; font-weight: bold; }
+        .bmi-obese { color: #dc3545; font-weight: bold; }
+
+        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 3000;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden; transition: all 0.3s;
+        }
+        .modal.show { opacity: 1; visibility: visible; }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 400px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        .btn-delete { background: #dc3545; }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="hamburger" id="hamburger" onclick="toggleMenu()">
+            <svg viewBox="0 0 24 24">
+                <line class="line" x1="4" y1="7" x2="20" y2="7"/>
+                <line class="line" x1="4" y1="12" x2="20" y2="12"/>
+                <line class="line" x1="4" y1="17" x2="20" y2="17"/>
+            </svg>
+        </div>
+        <div class="title">Weight & BMI Tracker</div>
+        <div></div>
+    </div>
+
+    <!-- Sidebar Menu -->
+    <div class="sidebar" id="sidebar">
+        <div class="menu-item" onclick="selectOption('height')">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Set Height</div>
+            <div class="menu-desc">Enter your height in inches</div>
+        </div>
+        <div class="menu-item" onclick="selectOption('weight')">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>Record Weight</div>
+            <div class="menu-desc">Log today's weight in pounds</div>
+        </div>
+        <div class="menu-item" onclick="selectOption('goal')">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>Set Goal Weight</div>
+            <div class="menu-desc">Your target weight in pounds</div>
+        </div>
+        <div class="menu-item" onclick="toggleBmiChart(); toggleMenu()">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Toggle BMI Chart</div>
+            <div class="menu-desc">Switch between weight & BMI</div>
+        </div>
+        <div class="menu-item" onclick="exportData(); toggleMenu()">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export Data</div>
+            <div class="menu-desc">Download backup file</div>
+        </div>
+        <div class="menu-item" onclick="document.getElementById('importFile').click()">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Import Data</div>
+            <div class="menu-desc">Restore from file</div>
+        </div>
+        <div class="menu-item" onclick="clearAllData(); toggleMenu()" style="color:#d33">
+            <div class="menu-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3-3h8"/></svg>Clear All Data</div>
+            <div class="menu-desc">Delete everything permanently</div>
+        </div>
+    </div>
+    <div class="overlay" onclick="toggleMenu()"></div>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+
+    <!-- Edit Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h3>Edit Entry</h3>
+            <label>Date</label><input type="date" id="editDate">
+            <label>Weight (lbs)</label><input type="number" id="editWeight" step="0.1">
+            <button class="main-btn" onclick="saveEdit()">Save Changes</button>
+            <button class="main-btn btn-delete" onclick="deleteEntry()">Delete Entry</button>
+            <button class="main-btn" style="background:#666" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+
+        <!-- Goal Progress -->
+        <div class="card goal-card" id="goalCard">
+            <div class="progress-ring">
+                <svg width="160" height="160">
+                    <circle class="progress-circle-bg" cx="80" cy="80" r="70"/>
+                    <circle class="progress-circle" cx="80" cy="80" r="70" stroke-dasharray="439.8" stroke-dashoffset="439.8"/>
+                </svg>
+                <div class="progress-text">0%</div>
+            </div>
+            <div class="goal-info" id="goalText">Set your goal weight to begin</div>
+        </div>
+
+        <!-- Input Card -->
+        <div class="card" id="inputCard" style="display:none">
+            <div class="input-section">
+                <div id="heightForm" style="display:none">
+                    <label>Height (inches)</label>
+                    <input type="number" id="heightInput" placeholder="e.g. 70" step="0.1">
+                    <button class="main-btn" onclick="saveHeight()">Save Height</button>
+                </div>
+                <div id="weightForm" style="display:none">
+                    <label>Today's Weight (lbs)</label>
+                    <input type="number" id="weightInput" placeholder="e.g. 185.5" step="0.1">
+                    <button class="main-btn" onclick="addWeight()">Record Weight</button>
+                </div>
+                <div id="goalForm" style="display:none">
+                    <label>Goal Weight (lbs)</label>
+                    <input type="number" id="goalInput" placeholder="e.g. 170" step="0.1">
+                    <button class="main-btn" onclick="saveGoal()">Save Goal</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card">
+            <div class="chart-container">
+                <canvas id="weightChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="card">
+            <table id="weightTable">
+                <thead><tr><th>Date</th><th>Weight (lbs)</th><th>BMI</th><th>Status</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let chart, showBmi = false, editingIndex = -1;
+
+        function calculateBMI(w, h) { return h ? ((w * 703) / (h * h)).toFixed(1) : null; }
+        function getBmiStatus(bmi) {
+            bmi = parseFloat(bmi);
+            if (bmi < 18.5) return {text:"Underweight",class:"bmi-under"};
+            if (bmi < 25)   return {text:"Normal",    class:"bmi-normal"};
+            if (bmi < 30)   return {text:"Overweight",class:"bmi-over"};
+            return {text:"Obese", class:"bmi-obese"};
+        }
+
+        const getData = () => JSON.parse(localStorage.getItem('weightData') || '[]');
+        const saveData = d => localStorage.setItem('weightData', JSON.stringify(d));
+        const getHeight = () => parseFloat(localStorage.getItem('userHeightInches') || '0');
+        const getGoal = () => parseFloat(localStorage.getItem('goalWeight') || '0');
+
+        function saveHeight() {
+            const h = parseFloat(document.getElementById('heightInput').value);
+            if (!h || h < 50 || h > 90) return alert("Enter 50–90 inches");
+            localStorage.setItem('userHeightInches', h);
+            alert(`Height saved: ${h} inches`);
+            document.getElementById('inputCard').style.display = 'none';
+            updateAll();
+        }
+
+        function saveGoal() {
+            const g = parseFloat(document.getElementById('goalInput').value);
+            if (!g || g <= 0) return alert("Enter valid goal weight");
+            localStorage.setItem('goalWeight', g);
+            alert(`Goal weight set: ${g} lbs`);
+            document.getElementById('inputCard').style.display = 'none';
+            updateAll();
+        }
+
+        function addWeight() {
+            const w = parseFloat(document.getElementById('weightInput').value);
+            if (!w || w <= 0) return alert("Enter valid weight");
+            const data = getData();
+            data.push({date: new Date().toISOString().split('T')[0], weight: w});
+            data.sort((a,b) => a.date.localeCompare(b.date));
+            saveData(data);
+            document.getElementById('weightInput').value = '';
+            document.getElementById('inputCard').style.display = 'none';
+            updateAll();
+        }
+
+        function updateAll() {
+            const data = getData(), height = getHeight(), goal = getGoal();
+            const latest = data.length ? data[data.length-1].weight : 0;
+            const progress = goal && latest ? Math.min(100, Math.round((1 - (latest - goal) / (data[0]?.weight || latest - goal + 1)) * 100)) : 0;
+
+            // Update Goal Card
+            const ring = document.querySelector('.progress-circle');
+            const text = document.querySelector('.progress-text');
+            const goalText = document.getElementById('goalText');
+            const goalCard = document.getElementById('goalCard');
+
+            if (goal && data.length) {
+                const diff = latest - goal;
+                const absDiff = Math.abs(diff).toFixed(1);
+                ring.style.strokeDashoffset = 439.8 * (1 - progress / 100);
+                text.textContent = `${progress}%`;
+                if (diff <= 0) {
+                    goalText.innerHTML = `Goal Achieved! You did it!`;
+                    goalCard.classList.add('goal-achieved');
+                } else {
+                    goalText.innerHTML = `${absDiff} lbs to go → <strong>${goal} lbs</strong>`;
+                    goalCard.classList.remove('goal-achieved');
+                }
+            } else {
+                ring.style.strokeDashoffset = 439.8;
+                text.textContent = "0%";
+                goalText.textContent = goal ? `Goal: ${goal} lbs (record weight)` : "Set your goal weight";
+            }
+
+            // Update Table
+            const tbody = document.querySelector('#weightTable tbody');
+            tbody.innerHTML = '';
+            data.forEach((e, i) => {
+                const bmi = height ? calculateBMI(e.weight, height) : null;
+                const s = bmi ? getBmiStatus(bmi) : {text:"—",class:""};
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${e.date}</td><td>${e.weight.toFixed(1)}</td><td>${bmi||'—'}</td><td class="${s.class}">${s.text}</td>`;
+                row.dataset.index = i;
+                row.addEventListener('click', () => openEditModal(i));
+                tbody.appendChild(row);
+                new Hammer(row).on('swipeleft swiperight', () => openEditModal(i));
+            });
+
+            // Update Chart with Goal Line
+            if (chart) chart.destroy();
+            const datasets = [{
+                label: showBmi ? 'BMI' : 'Weight (lbs)',
+                data: showBmi ? data.map(e => calculateBMI(e.weight, height)) : data.map(e => e.weight),
+                borderColor: showBmi ? '#e91e63' : '#4a90e2',
+                backgroundColor: showBmi ? 'rgba(233,30,99,0.1)' : 'rgba(74,144,226,0.2)',
+                fill: true, tension: 0.3
+            }];
+            if (goal && !showBmi) {
+                datasets.push({
+                    label: 'Goal Weight',
+                    data: Array(data.length).fill(goal),
+                    borderColor: '#e91e63',
+                    borderDash: [10, 5],
+                    pointRadius: 0,
+                    borderWidth: 2
+                });
+            }
+
+            chart = new Chart(document.getElementById('weightChart'), {
+                type: 'line',
+                data: { labels: data.map(e => e.date), datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { title: { display: true, text: showBmi ? `BMI Trend` : 'Weight Trend' }}
+                }
+            });
+        }
+
+        function openEditModal(i) {
+            editingIndex = i;
+            const e = getData()[i];
+            document.getElementById('editDate').value = e.date;
+            document.getElementById('editWeight').value = e.weight;
+            document.getElementById('editModal').classList.add('show');
+        }
+        function closeModal() { document.getElementById('editModal').classList.remove('show'); }
+        function saveEdit() {
+            const date = document.getElementById('editDate').value;
+            const weight = parseFloat(document.getElementById('editWeight').value);
+            if (!date || !weight) return alert("Fill all fields");
+            const data = getData();
+            data[editingIndex] = {date, weight};
+            data.sort((a,b) => a.date.localeCompare(b.date));
+            saveData(data);
+            closeModal(); updateAll();
+        }
+        function deleteEntry() {
+            if (confirm("Delete this entry?")) {
+                const data = getData();
+                data.splice(editingIndex, 1);
+                saveData(data);
+                closeModal(); updateAll();
+            }
+        }
+
+        function toggleMenu() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.getElementById('hamburger').classList.toggle('active');
+            document.querySelector('.overlay').classList.toggle('show');
+        }
+
+        function selectOption(type) {
+            document.getElementById('inputCard').style.display = 'block';
+            document.getElementById('heightForm').style.display = type==='height'?'block':'none';
+            document.getElementById('weightForm').style.display = type==='weight'?'block':'none';
+            document.getElementById('goalForm').style.display = type==='goal'?'block':'none';
+            if (type === 'goal') {
+                const g = getGoal();
+                document.getElementById('goalInput').value = g || '';
+                document.getElementById('goalInput').placeholder = g ? `Current goal: ${g} lbs` : "e.g. 170";
+            }
+            toggleMenu();
+        }
+
+        function toggleBmiChart() { showBmi = !showBmi; updateAll(); }
+
+        function exportData() {
+            const data = {heightInches: getHeight(), goalWeight: getGoal(), entries: getData()};
+            const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href=url; a.download='weight-tracker-full.json'; a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('importFile').addEventListener('change', e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = ev => {
+                try {
+                    const o = JSON.parse(ev.target.result);
+                    if (o.heightInches) localStorage.setItem('userHeightInches', o.heightInches);
+                    if (o.goalWeight) localStorage.setItem('goalWeight', o.goalWeight);
+                    if (o.entries) saveData(o.entries);
+                    updateAll();
+                    alert('Data imported successfully!');
+                } catch { alert('Invalid file'); }
+            };
+            r.readAsText(file);
+        });
+
+        function clearAllData() {
+            if (confirm('Delete ALL data permanently?')) {
+                localStorage.clear();
+                updateAll();
+            }
+        }
+
+        window.onload = () => {
+            const h = getHeight();
+            if (h) document.getElementById('heightInput').placeholder = `Current: ${h} in`;
+            updateAll();
+        };
+    </script>
+</body>
+</html>
