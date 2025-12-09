@@ -111,7 +111,18 @@
             transform: translate(-50%, -50%);
             font-size: 32px; font-weight: bold;
         }
-        .goal-info { font-size: 18px; margin: 10px 0; }
+        .goal-info { 
+            font-size: 18px; margin: 12px 0 6px; 
+        }
+        .total-lost {
+            font-size: 24px; 
+            font-weight: 900; 
+            margin-top: 8px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .total-lost.positive { color: #28a745; }
+        .total-lost.negative { color: #ff6b6b; }
+
         .goal-achieved { background: #28a745 !important; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.8; } }
 
@@ -216,6 +227,7 @@
                 <div class="progress-text">0%</div>
             </div>
             <div class="goal-info" id="goalText">Set your goal weight to begin</div>
+            <div class="total-lost" id="totalLost">Total lost: 0 lbs</div>
         </div>
 
         <!-- Input Card -->
@@ -305,7 +317,21 @@
         function updateAll() {
             const data = getData(), height = getHeight(), goal = getGoal();
             const latest = data.length ? data[data.length-1].weight : 0;
-            const progress = goal && latest ? Math.min(100, Math.round((1 - (latest - goal) / (data[0]?.weight || latest - goal + 1)) * 100)) : 0;
+            const starting = data.length ? data[0].weight : latest;
+            const totalChange = starting - latest;
+            const progress = goal && latest && starting > goal ? Math.min(100, Math.round((totalChange / (starting - goal)) * 100)) : 0;
+
+            // Update Total Lost (now bold & below goal text)
+            const totalLostEl = document.getElementById('totalLost');
+            if (data.length > 1) {
+                const sign = totalChange > 0 ? 'lost' : 'gained';
+                const abs = Math.abs(totalChange).toFixed(1);
+                totalLostEl.innerHTML = `Total <strong>${abs} lbs ${sign}</strong>`;
+                totalLostEl.className = 'total-lost ' + (totalChange > 0 ? 'positive' : 'negative');
+            } else {
+                totalLostEl.innerHTML = 'Total lost: <strong>0 lbs</strong>';
+                totalLostEl.className = 'total-lost';
+            }
 
             // Update Goal Card
             const ring = document.querySelector('.progress-circle');
@@ -331,21 +357,22 @@
                 goalText.textContent = goal ? `Goal: ${goal} lbs (record weight)` : "Set your goal weight";
             }
 
-            // Update Table
+            // Update Table (newest first)
             const tbody = document.querySelector('#weightTable tbody');
             tbody.innerHTML = '';
-            data.forEach((e, i) => {
+            data.slice().reverse().forEach((e, reversedI) => {
+                const originalI = data.length - 1 - reversedI;
                 const bmi = height ? calculateBMI(e.weight, height) : null;
                 const s = bmi ? getBmiStatus(bmi) : {text:"—",class:""};
                 const row = document.createElement('tr');
                 row.innerHTML = `<td>${e.date}</td><td>${e.weight.toFixed(1)}</td><td>${bmi||'—'}</td><td class="${s.class}">${s.text}</td>`;
-                row.dataset.index = i;
-                row.addEventListener('click', () => openEditModal(i));
+                row.dataset.index = originalI;
+                row.addEventListener('click', () => openEditModal(originalI));
                 tbody.appendChild(row);
-                new Hammer(row).on('swipeleft swiperight', () => openEditModal(i));
+                new Hammer(row).on('swipeleft swiperight', () => openEditModal(originalI));
             });
 
-            // Update Chart with Goal Line
+            // Update Chart
             if (chart) chart.destroy();
             const datasets = [{
                 label: showBmi ? 'BMI' : 'Weight (lbs)',
